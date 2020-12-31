@@ -1,9 +1,21 @@
 const inquirer = require("inquirer");
 const connection = require("./modules/Connection");
 const cTable = require("console.table");
-const { getEmployees, getEmployeesbyManager, addEmployee } = require("./modules/Employee.js");
-const { getDepartments, getDepartmentBudget } = require("./modules/Department");
-const { getRoles } = require("./modules/Role");
+const {
+  getEmployees,
+  getEmployeesbyManager,
+  addEmployee,
+  deleteEmployee,
+  updateEmployeeRole,
+  updateEmployeeManager,
+} = require("./modules/Employee.js");
+const {
+  getDepartments,
+  getDepartmentBudget,
+  addDepartment,
+  deleteDepartment,
+} = require("./modules/Department");
+const { getRoles, addRole, deleteRole } = require("./modules/Role");
 
 let roles;
 let departments;
@@ -16,9 +28,8 @@ function getInitData() {
   getRoles().then((res) => (roles = res));
   getEmployeesbyManager().then((res) => (managers = res));
 }
-getInitData();
 
-console.log("\nWelcome to the Employee Tracker.\n");
+console.log("\n--- Welcome to the Employee Tracker. ---\n");
 
 start();
 
@@ -33,6 +44,7 @@ async function askRestart() {
 }
 
 async function start() {
+  getInitData();
   //Prompt to ask the Main Operations like View, Delete, Update and Add
   const { mainTask } = await inquirer.prompt({
     type: "list",
@@ -89,10 +101,9 @@ async function start() {
             message: "Please choose the department",
             choices: () => departments.map((d) => d.name),
           });
-          let name = departments.find((d) => d.name === dep_name)["name"];
-          getDepartmentBudget(name).then(({ totalBudget }) =>
+          getDepartmentBudget(dep_name).then(({ totalBudget, totalEmployees }) =>
             console.log(
-              "\n--- Total budget of " + name + " department is " + totalBudget + ". ---\n"
+              `\n--- Total budget of ${dep_name} department is ${totalBudget} with ${totalEmployees} employees. ---\n`
             )
           );
           break;
@@ -101,7 +112,7 @@ async function start() {
 
       break;
 
-    case "Add Data":
+    case "Add Data": {
       let { addTask } = await inquirer.prompt({
         type: "list",
         name: "addTask",
@@ -109,35 +120,36 @@ async function start() {
         choices: ["Department", "Employee", "Role"],
       });
 
+      //Switch statement for add operations
       switch (addTask) {
-        case "Employee":
-          const { first_name } = await inquirer.prompt({
+        case "Employee": {
+          let { first_name } = await inquirer.prompt({
             type: "input",
             name: "first_name",
             message: "Please enter first name of the employee.",
           });
 
-          const { last_name } = await inquirer.prompt({
+          let { last_name } = await inquirer.prompt({
             type: "input",
             name: "last_name",
             message: "Please enter last name of the employee.",
           });
 
-          const { r_title } = await inquirer.prompt({
+          let { r_title } = await inquirer.prompt({
             type: "list",
             name: "r_title",
             message: "Please choose role of the employee.",
             choices: () => roles.map((r) => r.Title),
           });
 
-          const { m_name } = await inquirer.prompt({
+          let { m_name } = await inquirer.prompt({
             type: "list",
             name: "m_name",
             message: "Please choose manager for the employee.",
             choices: () => ["None"].concat(managers.map((r) => r.Name)), //Extra option to not select any manager.
           });
 
-          const employeeInfo = {
+          let employeeInfo = {
             first_name,
             last_name,
             role_id: roles.filter((r) => r.Title === r_title)[0]["role_id"],
@@ -152,29 +164,190 @@ async function start() {
               : console.log("\n--- Failed to add a new employee. ---\n")
           );
           break;
+        }
 
-        case "Department":
+        case "Department": {
+          let { dep_name } = await inquirer.prompt({
+            type: "input",
+            name: "dep_name",
+            message: "Please enter the name of department.",
+          });
+
+          addDepartment(dep_name).then(({ affectedRows }) =>
+            affectedRows
+              ? console.log("\n--- New department added successfully. ---\n")
+              : console.log("\n--- Failed to add a new department. ---\n")
+          );
+
           break;
-        case "Role":
+        }
+        case "Role": {
+          let { role_title } = await inquirer.prompt({
+            type: "input",
+            name: "role_title",
+            message: "Please enter name of the role.",
+          });
+          let { role_salary } = await inquirer.prompt({
+            type: "input",
+            name: "role_salary",
+            message: "Please enter salary amount for this role.",
+            validate: (s) => (!isNaN(s) ? true : "Enter a valid amount."),
+          });
+          let { dep_name } = await inquirer.prompt({
+            type: "list",
+            name: "dep_name",
+            message: "Please choose the department for this role.",
+            choices: () => departments.map((d) => d.name),
+          });
+
+          const roleInfo = {
+            role_title,
+            role_salary: parseInt(role_salary),
+            department_Id: departments.filter((d) => d.name === dep_name)[0]["department_id"],
+          };
+
+          addRole(roleInfo).then(({ affectedRows }) =>
+            affectedRows
+              ? console.log("\n--- New role added successfully. ---\n")
+              : console.log("\n--- Failed to add a new role. ---\n")
+          );
+
           break;
+        }
       }
       setTimeout(askRestart, 2000);
       break;
-    case "Update Data":
-      inquirer.prompt({
+    }
+
+    case "Update Data": {
+      const { updateTask } = await inquirer.prompt({
         type: "list",
-        name: "addTask",
+        name: "updateTask",
         message: "What would you like to update today?",
-        choices: ["Employee's Manager", "Employee's role"],
+        choices: ["Employee's manager", "Employee's role"],
       });
-      break;
-    case "Delete Data":
-      inquirer.prompt({
+
+      let { emp_name } = await inquirer.prompt({
         type: "list",
-        name: "addTask",
+        name: "emp_name",
+        message: "Please choose the employee.",
+        choices: employees.map((e) => e.Name),
+      });
+
+      //Switch statement for add operations
+      switch (updateTask) {
+        case "Employee's manager": {
+          let { m_name } = await inquirer.prompt({
+            type: "list",
+            name: "m_name",
+            message: "Please choose the new manager.",
+            choices: ["None"].concat(managers.map((r) => r.Name)),
+          });
+          let empInfo = {
+            emp_id: employees.filter((e) => e.Name === emp_name)[0]["emp_id"],
+            manager_id:
+              m_name == "None" ? null : managers.filter((m) => m.Name === m_name)[0]["emp_id"],
+          };
+
+          updateEmployeeManager(empInfo).then(({ affectedRows }) =>
+            affectedRows
+              ? console.log("\n--- Manager changed successfully. ---\n")
+              : console.log("\n--- Failed to change manager. ---\n")
+          );
+          break;
+        }
+        case "Employee's role": {
+          let { r_title } = await inquirer.prompt({
+            type: "list",
+            name: "r_title",
+            message: "Please choose the new role.",
+            choices: () => roles.map((r) => r.Title),
+          });
+          let empInfo = {
+            emp_id: employees.filter((e) => e.Name === emp_name)[0]["emp_id"],
+            role_id: roles.filter((m) => m.Title === r_title)[0]["role_id"],
+          };
+          updateEmployeeRole(empInfo).then(({ affectedRows }) =>
+            affectedRows
+              ? console.log("\n--- Role updated successfully. ---\n")
+              : console.log("\n--- Failed to update the role. ---\n")
+          );
+          break;
+        }
+      }
+
+      setTimeout(askRestart, 2000);
+      break;
+    }
+    case "Delete Data": {
+      const { deleteTask } = await inquirer.prompt({
+        type: "list",
+        name: "deleteTask",
         message: "What would you like to delete today?",
         choices: ["Department", "Employee", "Role"],
       });
+
+      //Switch statement for delete operations.
+      switch (deleteTask) {
+        case "Employee": {
+          console.log(employees.length);
+          let { emp_name } = await inquirer.prompt({
+            type: "list",
+            name: "emp_name",
+            message: "Please choose the employee to be deleted.",
+            choices: employees.map((e) => e.Name),
+          });
+
+          let emp_id = employees.filter((e) => e.Name === emp_name)[0]["emp_id"];
+
+          deleteEmployee(emp_id).then(({ affectedRows }) =>
+            affectedRows
+              ? console.log("\n--- Employee deleted successfully. ---\n")
+              : console.log("\n--- Failed to delete the employee. ---\n")
+          );
+
+          break;
+        }
+        case "Role": {
+          let { role_title } = await inquirer.prompt({
+            type: "list",
+            name: "role_title",
+            message: "Please choose the role to be deleted.",
+            choices: roles.map((r) => r.Title),
+          });
+
+          let role_id = roles.filter((e) => e.Title === role_title)[0]["role_id"];
+
+          deleteRole(role_id).then(({ affectedRows }) =>
+            affectedRows
+              ? console.log("\n--- Role deleted successfully. ---\n")
+              : console.log("\n--- Failed to delete the role. ---\n")
+          );
+
+          break;
+        }
+        case "Department": {
+          let { dep_name } = await inquirer.prompt({
+            type: "list",
+            name: "dep_name",
+            message: "Please choose the department to be deleted.",
+            choices: departments.map((d) => d.name),
+          });
+
+          let department_id = departments.filter((d) => d.name === dep_name)[0]["department_id"];
+
+          deleteDepartment(department_id).then(({ affectedRows }) =>
+            affectedRows
+              ? console.log("\n--- Department deleted successfully. ---\n")
+              : console.log("\n--- Failed to delete the Department. ---\n")
+          );
+
+          break;
+        }
+      }
+
+      setTimeout(askRestart, 2000);
       break;
+    }
   }
 }

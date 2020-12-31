@@ -11,4 +11,23 @@ module.exports.getRoles = () => {
     );
   });
 };
-module.exports.setRole = () => {};
+module.exports.addRole = (roleInfo) => {
+  return new Promise((resolve, reject) => {
+    const { role_title, role_salary, department_Id } = roleInfo;
+    connection.query(
+      `INSERT INTO Roles(title,salary,department_id) 
+        VALUES("${role_title}",${role_salary},${department_Id});`,
+      (err, res) => {
+        err ? reject(err) : resolve(res);
+      }
+    );
+  });
+};
+
+module.exports.deleteRole = (role_id) => {
+  return new Promise((resolve, reject) => {
+    connection.query(`DELETE FROM Roles WHERE role_id=${role_id}`, (err, res) =>
+      err ? reject(err) : resolve(res)
+    );
+  });
+};
